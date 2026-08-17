@@ -1,0 +1,6 @@
+{
+  "shuffled_stab": 0.068859533164009,
+  "rand_max_cos": 0.3367895136708698,
+  "priv_gap_heuristic": 0.5,
+  "note": "Replace with real bootstrap on shuffled labels & random thetas; add head-level and optimal track"
+}

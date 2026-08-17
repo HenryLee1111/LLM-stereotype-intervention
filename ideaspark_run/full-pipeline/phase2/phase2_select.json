@@ -1,0 +1,22 @@
+{
+  "selected_gaps": [
+    {
+      "index": 0,
+      "gap": "Stability ≠ Identifiability: heuristic steerability confounded with suboptimal optimization",
+      "main_pattern": "controlled_diagnostic_design",
+      "sub_pattern": "C03 (controlled_diagnostic_design)",
+      "role": "anchor"
+    },
+    {
+      "index": 1,
+      "gap": "Editing success assumed to imply privileged localization (Kim et al.) without random-direction optimal control (Wang & Veitch audit)",
+      "main_pattern": "assumption_audit_and_pivot",
+      "sub_pattern": "C01 (assumption_audit_and_pivot)",
+      "role": "sibling — earns seat via removal test: without auditing the localization assumption, the diagnostic's PrivGap comparison is uninterpretable"
+    }
+  ],
+  "coherence_thread_type": "CHAIN: audit (why heuristic comparison is invalid) → diagnostic (how to isolate the confound with matched controls)",
+  "composition_note": "Anchor-only would be a pure measurement paper (Stability report); sibling is required to make the measurement falsifiable under the localization debate. Dual-pattern chain attested in companion-combos.md: controlled_diagnostic_design + assumption_audit_and_pivot is a common Oral combo for 'measurement instrument is the artifact' problems.",
+  "pattern_saturation": "controlled_diagnostic_design 86 papers (recent Oral: OccuGender 2024, Representational Stability 2025); assumption_audit_and_pivot 181 papers",
+  "deferred_gaps": []
+}

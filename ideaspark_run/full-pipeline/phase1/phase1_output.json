@@ -1,0 +1,30 @@
+{
+  "intake": {
+    "research_direction": "Toward Stable and Identifiable Bias Directions in LLMs: auditing linear gender/occupation bias directions for statistical stability vs causal identifiability, building on Kim et al. ICLR 2025 and addressing Wang & Veitch 2025 Does Editing Provide Evidence for Localization?",
+    "contribution_type": "method + diagnostic",
+    "user_direction": "Define Stability and Identifiability first, then use ResearchStudio Idea tools to complete ResearchStudio IdeaSpark/Paper-Search/Scoop-Check pipeline",
+    "user_direction_disposition": "adopted",
+    "compute": "40 GPU-hours + $50 API, single 80GB GPU, 1 week"
+  },
+  "bottleneck_statement": "The field assumes Stability (bootstrap cosine >0.9) + heuristic editability (x+ασθ steerability) implies Identifiability (Privileged causal localization), but Wang & Veitch (2502.11447) proves this implication is false in general: optimal edits at random heads match full-model alignment, so heuristic success cannot certify a direction. No prior bias-direction work (Kim et al. 2503.02080, OccuGender, Kotek) provides a falsifiable separation of Stability vs Identifiability, nor a confound-isolating diagnostic with random-direction & optimal-control baselines [cited: arxiv:2502.11447, arxiv:2503.02080, arxiv:2511.19166].",
+  "closest_adjacent": [
+    {
+      "paper_id": "arxiv:2502.11447",
+      "summary_and_residue": "Introduces optimal localized LoRA-IPO as gold standard to test localization; shows 16 random heads = top heads and single random head = full-model. Residue: only truthfulness domain, no stability metric, no bias application; leaves open whether PrivGap collapses for all high-level concepts."
+    },
+    {
+      "paper_id": "arxiv:2503.02080",
+      "summary_and_residue": "Shows linear political ideology directions in attention heads are decodable and heuristically steerable. Residue: no bootstrap stability, no random-head optimal comparison, no formal Identifiability definition; heuristic x+ασθ is assumed optimal."
+    },
+    {
+      "paper_id": "arxiv:2511.19166",
+      "summary_and_residue": "Measures representational stability of truth directions via probe rotation under label perturbations across 16 models. Residue: rotation not causal; not tested on occupation stereotypes; no PrivGap or steering upper bound."
+    }
+  ],
+  "what_phase_0_did_not_address": [
+    "Stability vs Identifiability formal gap: literature measures one or the other, never their joint falsifiable relation — cost is that linear bias interventions may operate on non-identifiable directions without detection (practitioner: unreliable debiasing; intellectual: inflated claims of 'found bias axis').",
+    "Optimal vs heuristic confounding: no bias-direction study pits heuristic mass-mean shift against optimal IPO, so apparent PrivGap may be an artifact of suboptimal optimization (cost: false positives for localization).",
+    "Cross-template and shuffled-label nulls for bias: current bias probing lacks matched-condition controls holding occupation constant while varying gender signal source (cost: name-memorization masquerading as stereotype direction)."
+  ],
+  "state": "proceed"
+}

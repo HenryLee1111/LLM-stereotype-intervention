@@ -1,0 +1,1 @@
+Toward Stable and Identifiable Bias Directions in LLMs: auditing linear bias directions (gender/occupation) for statistical stability vs causal identifiability, building on Kim et al. ICLR 2025 linear political representations and addressing Wang & Veitch 2025 Does Editing Provide Evidence for Localization
