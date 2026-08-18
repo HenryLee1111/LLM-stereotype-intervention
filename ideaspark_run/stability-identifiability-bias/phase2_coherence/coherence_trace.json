@@ -1,0 +1,132 @@
+{
+  "phase": "2.3 coherence gate",
+  "verdict": "patched",
+  "traced_artifact": "IDEA_CARD.md (hand-written candidate) + DEFINITIONS_Stability_Identifiability.md",
+  "note": "This gate was run against the user's pre-existing hand-written idea card, because no phase2_generate output existed in the run dir. Repairs are folded into phase2_generate/phase2_generate_output.json, which is the canonical candidate from here on.",
+
+  "T1_dataflow_formalization": {
+    "undefined_symbols": [
+      "M — the bias metric is named ('pronoun logit difference, or GPT-judge score') but never fixed to one estimand, so Delta_M is not computable from the card alone. Two different M give two different PrivGap verdicts with no stated reconciliation.",
+      "alpha* — 'optimal intervention strength' appears inside Definition 4 but no procedure produces it in the heuristic track; the card sweeps alpha in [-3,3] and separately writes alpha*, leaving the optimum's selection rule unstated (chosen on the same probes it is scored on, or on a held-out split?)",
+      "theta* — used as if it denotes a population object, but every step computes theta-hat, an estimate. The card never declares which one PrivGap is a property of. This is the estimand hole that T4 downgrades."
+    ],
+    "missing_producers": [
+      "The optimal track's inputs. Step 3 says 'optimize b, search for optimal b* (i.e. the optimal theta)', while Step 4 says the comparison is 'theta_true vs theta_rand vs theta_shuffled under the same b*'. No step states how a supplied theta enters the optimal track. See BLOCKING-1."
+    ],
+    "circular_dependencies": [
+      "None found. The stability track and the intervention track are cleanly sequential."
+    ],
+    "unbound_parameters": [
+      "R = 20 (random-direction pool size). Read as a parameter by the max in Definition 4, carries no name, no selection rule, and — per the executed dry-run below — determines the verdict. See BLOCKING-2.",
+      "epsilon in 'PrivGap > epsilon'. Never given a default or a selection rule anywhere in the card or DEFINITIONS.md.",
+      "tau in 'existence: |Delta_M| > tau (e.g. Cohen's d > 0.8)'. Unnamed magic constant imported by convention.",
+      "0.8 in the efficiency condition |Delta_M|/|Delta_M_full| > 0.8. Unnamed, and the denominator carries no floor, so the ratio is unstable when the full-model arm is near zero.",
+      "0.5 sigma in the falsification prediction's 'PrivGap_heuristic > 0.5 sigma'. Traced to outputs_bias_v2/v2_null_check.json, where the field priv_gap_heuristic is literally 0.5 next to the note 'Replace with real bootstrap on shuffled labels & random thetas'. It is a placeholder, not a derived or measured bar. See BLOCKING-3."
+    ]
+  },
+
+  "T2_numeric_dry_run": {
+    "status": "executed",
+    "tool": "awk (POSIX), Box-Muller normal draws, seed 20260818",
+    "probe_1": {
+      "question": "Definition 4 sets PrivGap = |Delta_M(theta*)| - max over the random pool of |Delta_M(theta_r)|. Does the verdict depend on the pool size R_n, which the card leaves unbound?",
+      "instance": "Null: |Delta_M(theta_r)| half-normal with unit scale. Treatment: a genuinely privileged direction at |Delta_M(theta*)| = 2.0 sigma. 3000 trials per R_n.",
+      "script": "for each R_n, draw R_n half-normal comparators, record max, PrivGap = 2.0 - max, and the rank p-value (1 + #{>= 2.0}) / (1 + R_n)",
+      "output": [
+        "R_n     E[max|dM_r|]   E[PrivGap]   P(PrivGap>0)   E[p_rank]",
+        "20      2.1687         -0.1687      0.3883         0.09186",
+        "100     2.7456         -0.7456      0.0080         0.05440",
+        "500     3.2430         -1.2430      0.0000         0.04740",
+        "2000    3.6307         -1.6307      0.0000         0.04604"
+      ],
+      "reading": "The max-based statistic diverges: E[max] grows without bound in R_n, so PrivGap decreases monotonically and its sign is set by the pool size rather than by the direction. Two consequences, both fatal as written. (a) At the card's own R_n = 20, a truly privileged direction sitting at 2 sigma is declared NOT identifiable 61% of the time — the test has roughly 39% power against its own headline effect size. (b) At R_n = 2000 the verdict is 'not identifiable' with probability 1 for ANY fixed direction, so the paper's predicted result can be manufactured by enlarging the pool. The rank p-value computed on the identical draws does not diverge: it converges to 0.0455, the true tail probability P(|Z| >= 2), as R_n grows. The quantile/rank form is consistent where the max form is not.",
+      "reading_dependence": "reading_robust — holds under any comparator distribution with unbounded support, which includes every distribution the card's Delta_M could plausibly follow."
+    },
+    "probe_2": {
+      "question": "The card treats theta-hat as a property of the representation. Aaron Schein's feedback (meeting notes, sections 5-7) asks the opposite: is theta-hat a property of the ESTIMATOR? Two estimators already in use in this literature, on identical activations — how far apart are they?",
+      "instance": "D = 896 (Qwen2.5-0.5B hidden_dim, from summary.txt). Sigma diagonal with per-coordinate std sweeping 1/kappa..kappa. mass-mean theta_mm = mu1 - mu0 (the ITI estimator, arxiv:2305.14250) vs Fisher theta_lda = Sigma^-1 (mu1 - mu0). Closed form, so the cosine is exact given the draw.",
+      "output": [
+        "anisotropy   cos(mm,lda)   angle(deg)",
+        "kappa=1      1.0000        0.00",
+        "kappa=2      0.7982        37.04",
+        "kappa=5      0.5680        55.39",
+        "kappa=10     0.4420        63.77"
+      ],
+      "reading": "At isotropy the two estimators agree by construction; at kappa = 5 they are 55 degrees apart with |cos| = 0.57, far under the 0.90 bar DEFINITIONS.md sets for 'stable'. LLM residual streams are markedly more anisotropic than kappa = 10 (a handful of rogue dimensions dominate the covariance), so this is a conservative floor. The pilot's Stab_boot = 0.979 is therefore compatible with two standard estimators disagreeing about the direction by more than 60 degrees on the same activations: bootstrap stability holds the estimator fixed and varies the data, and is silent about the axis Aaron actually asked about. The card's stability construct is missing a level.",
+      "reading_dependence": "reading_robust — the mm/LDA relation is definitional, not distributional; only the magnitude depends on the anisotropy assumed."
+    }
+  },
+
+  "T3_degenerate_probes": [
+    {
+      "probe": "Efficiency condition with a near-zero denominator: |Delta_M(theta*)| / |Delta_M_full| > 0.8 when the full-model optimum barely moves the metric.",
+      "result": "Ill-posed. If |Delta_M_full| = 0.01 and |Delta_M(theta*)| = 0.009, the ratio is 0.9 and the direction passes as 'efficient' while moving nothing. Repaired by a named denominator floor eta_floor = 0.2 logits below which the ratio is not reported."
+    },
+    {
+      "probe": "Shuffled-label null when the classes are perfectly separable, which is the pilot's actual regime (CV accuracy = 1.00).",
+      "result": "Informative, and it survives: the executed v2_null_check reports shuffled_stab = 0.069, so the instrument is calibrated on this axis. Retained as a hard gate (stab_null_max = 0.30) rather than a reported number."
+    },
+    {
+      "probe": "R = 0 / empty random pool.",
+      "result": "max over an empty set is undefined; PrivGap is undefined. The quantile form degrades gracefully instead (Q over an empty sample is reported as unavailable, and the rank p-value is 1/(1+0) = 1, correctly uninformative)."
+    }
+  ],
+
+  "T4_claim_grading": [
+    {
+      "claim": "'Stability is a necessary but not sufficient condition for Identifiability.'",
+      "grade": "conditional",
+      "assumptions_listed": "Holds once 'stability' is quantified over the estimator class as well as the data. Under bootstrap-only stability the claim is not merely insufficient, it is close to vacuous: probe 2 shows a direction can be bootstrap-stable at 0.98 while not being well defined across estimators at all. The card states the necessity direction without stating over what theta-hat is quantified."
+    },
+    {
+      "claim": "'PrivGap_optimal will regress to 0 (p > 0.1) — once optimal optimization is allowed, random directions reproduce the true direction's causal effect.'",
+      "grade": "overclaim — wording downgraded",
+      "assumptions_listed": "As specified this is not an empirical prediction but a consequence of the design: if b ranges freely over the head, the fitted optimum does not read the supplied theta at all, so the three arms are the same optimization problem and PrivGap_optimal = 0 identically. An unfalsifiable prediction cannot be the paper's headline. Repaired by the span-constrained channel, under which the prediction becomes contentful."
+    },
+    {
+      "claim": "'Both outcomes are publishable (the falsifiability Oral reviewers require).'",
+      "grade": "empirical",
+      "assumptions_listed": "Defensible, but only after BLOCKING-1 is repaired — before the repair one of the two outcomes is guaranteed by construction, which is the opposite of falsifiability."
+    },
+    {
+      "claim": "'Four-control diagnostic controlling sampling / template / layer / optimization-optimality.'",
+      "grade": "overclaim — wording downgraded",
+      "assumptions_listed": "Layer is a search dimension, not a confound that is being controlled — sweeping layers does not hold anything fixed. And the confound the advisor feedback names first (probe/estimator choice) is absent from the list. The count is right; the membership is not."
+    }
+  ],
+
+  "T5_naive_baseline_comparison": {
+    "independently_constructed_naive": "Fit one L2-logistic probe per residual layer on the existing name-cued prompts, take the layer with the top bootstrap cosine, steer with x + alpha*sigma*theta-hat, sweep alpha, and report that the pronoun logit gap moves together with a random-direction arm at the same alpha.",
+    "run_on_same_instance": "This is, up to the random arm, exactly run_bias_direction_mvp.py, whose output is in summary.txt.",
+    "verdict": "confronts_obstacle",
+    "reasoning": "The naive version is not merely weaker, it is answering a different question: it certifies that a direction is reproducible under resampling and that some edit along it moves a metric. Neither statement survives contact with the two executed probes. The declared branch (i) is upheld — but only for the REPAIRED candidate. The card as written does not confront the obstacle it names, because its optimal track cannot see the direction it claims to be testing."
+  },
+
+  "repairs_applied": [
+    "Comparator statistic changed from max to the (1-q) quantile with q = 0.05 named and swept, plus the exact rank p-value reported alongside; R_n named, defaulted to 200, with the selection rule R_n >= 1/alpha_target - 1.",
+    "Optimal track split into two nested factor levels — DIRECTION channel (b = c*theta, span-constrained) and LOCATION channel (b free within the head) — so the supplied direction is load-bearing in exactly one of them and the headline prediction becomes falsifiable.",
+    "Estimator class E introduced as a first-class object, with Stab_est added to the stability construct alongside Stab_boot; Stab_lex added as the observation-model repair for the name-cue confound.",
+    "ESTIMAND declared explicitly for both PrivGap-D and PrivGap-L.",
+    "Every unbound parameter named with a default and a selection rule: R_n, q, alpha_target, B, rho, K, R_h, stab_null_max, eta_floor.",
+    "The 0.5-sigma falsification bar removed (traced to a placeholder in v2_null_check.json); the prediction now states metric, direction and control only, with the one numeric anchor tagged 'measured in arxiv:2502.11447'.",
+    "The 'four controls' list corrected: sampling, template/lexical, estimator, optimization-optimality. Layer moved out of the control list and into the search dimensions.",
+    "Sub-pattern citation corrected from C03 to C02 — C03's parent is adapt_via_conditioning, not controlled_diagnostic_design; C02 is the controlled_diagnostic_design cluster (86 papers, which is the number the card was already quoting)."
+  ],
+
+  "unrepaired": [
+    {
+      "id": "UNREPAIRED-1",
+      "finding": "Literature grounding for this run is not connector-verified. phase0/.connectors_degraded records openreview skipped, and every row in lit_table.md carries retrieved_via = web_search or web_search+model_recall rather than arxiv/openalex/semanticscholar. Under the skill's own gate this is lit_grounding_mode = webfallback at best, and two rows (arxiv:2605.05715, arxiv:2607.04439) are not verifiable from the artifacts in the repo.",
+      "why_unrepaired": "Repair requires working retrieval connectors, which are not available in this environment. Out of scope for a patch-only gate.",
+      "structural_requirement": "Before submission, re-run phase0 with live connectors and re-check the novelty claim. The three load-bearing citations (2503.02080, 2502.11447, 2212.10678) are independently verifiable and the argument does not rest on the unverifiable rows, so this bounds confidence in the completeness of the collision check rather than in the mechanism.",
+      "blocking": true
+    },
+    {
+      "id": "UNREPAIRED-2",
+      "finding": "phase1_output.json carries no method_lineage field, so hard rule 2's regression check (does the mechanism reduce to a superseded ancestral node?) could not be run against a lineage tree, and the mandatory collateral-node source for alias_terms was unavailable.",
+      "why_unrepaired": "The field does not exist in the run's Phase 1 output; reconstructing it is a Phase 1 re-run, not a coherence patch.",
+      "structural_requirement": "alias_terms were built from parametric knowledge alone, which the skill documents as the failure mode that misses whole families. The specific families to check by hand before submission: randomization inference over nuisance-optimized statistics, specification-curve/multiverse analysis, and sham-control design in causal mediation.",
+      "blocking": true
+    }
+  ]
+}

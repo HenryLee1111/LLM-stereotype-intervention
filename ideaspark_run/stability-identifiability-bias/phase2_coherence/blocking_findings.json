@@ -1,0 +1,38 @@
+[
+  {
+    "id": "BLOCKING-1",
+    "title": "The optimal track cannot see the direction it claims to test, so the headline prediction is true by construction",
+    "step_quote": "Optimal 轨：移植 Wang & Veitch Sec.4：对 W^l 做重参数化 LoRA W^l + W^l b a^T，限制 b 仅在目标 head/layer 非零，用 IPO 目标在 WinoBias 偏好对 (x, y+, y-) 上优化，搜最优 b*（即最优 theta）  ...  对照：同一 alpha 或 b* 下对比 theta_true vs theta_rand vs theta_shuffled",
+    "analysis": "These two sentences are inconsistent. If b* is searched freely over the head's coordinates then b* IS the direction, and the supplied theta_true / theta_rand / theta_shuffled never enter the optimization — the three arms are literally the same optimization problem on the same head, so their fitted optima coincide up to optimizer noise. PrivGap_optimal is then identically zero as a matter of algebra, not as a finding. The card's headline falsification prediction ('PrivGap_optimal will regress to 0, p > 0.1') is therefore unfalsifiable: it cannot come out any other way. Conversely, if b is meant to be constrained by the supplied theta, no step says so and no step says how. The design also silently conflates two distinct claims — that no SITE is privileged (what Wang & Veitch actually measured) and that no DIRECTION is privileged (what the card wants to conclude) — which is the same conflation the card criticises Kim et al. for.",
+    "measured_numbers": "n/a — analytic. The optimum of a free-b IPO objective at a fixed site is a function of (objective, site, budget) only; theta does not appear in its argument list.",
+    "reading_dependence": "reading_robust. Under the alternative reading — that b is initialised at theta and then optimized freely — the finding survives in weaker form: IPO drives b away from its initialisation, so the arms converge and PrivGap_optimal degrades toward zero at a rate set by the optimization budget rather than by the direction, which makes the budget, not the direction, the thing being measured.",
+    "structural_requirement": "Any mechanism here needs the supplied direction to be load-bearing in at least one arm. The identifying condition is a NESTED submodel: constrain b to the ray b = c*theta and learn only the scale c (and the readout a), which is available because b enters solely through the outer product b a^T, so the span-constrained problem is a strict submodel of the free-b problem under the identical objective and budget. Available sources of the identifying variation: the direction (span-constrained channel) and the site (free-b channel). Excluded: any design in which both vary at once, because the resulting contrast is not attributable to either. Worth salvaging: the free-b channel itself, unchanged — it is a faithful transplant of Wang & Veitch into the stereotype domain and is a legitimate second result, provided it is labelled a claim about sites.",
+    "blocking": true,
+    "applies_to": "IDEA_CARD.md as written before completion",
+    "status": "obstacle hole — the honest fix is a redesign, not a patch, so it is recorded here rather than patched at 2.3. The canonical candidate in phase2_generate/phase2_generate_output.json was authored to confront it."
+  },
+  {
+    "id": "BLOCKING-2",
+    "title": "PrivGap as defined is a divergent statistic; its verdict is set by the unbound pool size, not by the direction",
+    "step_quote": "PrivGap(theta*) = |Delta M(theta*)| - max_{theta_r} |Delta M(theta_r)|, 其中 Delta M 为偏见度量变化, theta_r 为随机零分布  ...  各向同性随机向量（20 个）",
+    "analysis": "The comparator is the MAXIMUM over a pool of R_n random directions, and R_n is never named, defaulted, or given a selection rule. The maximum of R_n draws from any unbounded distribution grows without bound in R_n, so PrivGap decreases monotonically in a quantity the analyst chooses freely. The predicted result can be manufactured either way by choosing the pool size.",
+    "measured_numbers": "Executed Monte Carlo, 3000 trials per pool size, treatment fixed at a genuinely privileged 2.0 sigma, null half-normal. E[max] = 2.169 / 2.746 / 3.243 / 3.631 and P(PrivGap > 0) = 0.388 / 0.008 / 0.000 / 0.000 at R_n = 20 / 100 / 500 / 2000. At the card's own R_n = 20 a truly privileged 2-sigma direction is declared not identifiable 61% of the time. On the identical draws the rank p-value converges rather than diverging: 0.0919 / 0.0544 / 0.0474 / 0.0460, against the true tail probability P(|Z| >= 2) = 0.0455.",
+    "reading_dependence": "reading_robust — holds for any comparator distribution with unbounded support.",
+    "structural_requirement": "The comparator must be a fixed functional of the null DISTRIBUTION, not of the null SAMPLE SIZE. Two consistent choices are available: the (1-q) quantile of the comparator effects at a named tail level q, and the exact rank p-value (1 + #{comparators >= treatment}) / (1 + R_n). Both converge in R_n; R_n then controls resolution (the smallest attainable p is 1/(1+R_n)) instead of controlling the verdict. Excluded: any order statistic whose index is fixed rather than proportional to R_n. Worth salvaging: the whole comparator apparatus — 20 random directions was too few, not wrong in kind, and reporting the full comparator distribution rather than a summary lets a reader re-derive the contrast at any q.",
+    "blocking": true,
+    "applies_to": "IDEA_CARD.md as written before completion",
+    "status": "obstacle hole — the honest fix is a redesign, not a patch, so it is recorded here rather than patched at 2.3. The canonical candidate in phase2_generate/phase2_generate_output.json was authored to confront it."
+  },
+  {
+    "id": "BLOCKING-3",
+    "title": "The falsification prediction's numeric bar is a placeholder carried over from a stub file",
+    "step_quote": "我们预言：Heuristic 轨的 PrivGap_heuristic > 0.5 sigma（真方向优于最佳随机方向 0.5 个标准差），但 Optimal 轨的 PrivGap_optimal 将回归至 0（p > 0.1）",
+    "analysis": "The 0.5 traces directly to outputs_bias_v2/v2_null_check.json, where priv_gap_heuristic is the literal value 0.5 next to the note 'Replace with real bootstrap on shuffled labels & random thetas; add head-level and optimal track'. It is neither derived from the mechanism nor measured in any cited paper — it is a stub value that has been promoted into the paper's kill-switch field. The p > 0.1 threshold is similarly unsourced, and is used in the non-standard direction of accepting a null.",
+    "measured_numbers": "v2_null_check.json: {shuffled_stab: 0.0689, rand_max_cos: 0.3368, priv_gap_heuristic: 0.5, note: 'Replace with real bootstrap...'}. Note that rand_max_cos = 0.337 is itself a max-over-pool statistic and inherits BLOCKING-2.",
+    "reading_dependence": "reading_robust — the provenance is documented in the repository.",
+    "structural_requirement": "The falsification prediction needs a metric, a direction, and a control; the control already supplies the bar, so no number is required. Where a numeric anchor genuinely helps, the only admissible one available here is the measured near-zero optimal-intervention gap reported for truthfulness in arxiv:2502.11447, which must be tagged as measured and attributed. Excluded: any invented threshold, which can either kill the idea against a bar nobody chose or bless it against one set too low. Worth salvaging: the two-outcome structure of the prediction, which is sound once the bar is removed and BLOCKING-1 is repaired.",
+    "blocking": true,
+    "applies_to": "IDEA_CARD.md as written before completion",
+    "status": "obstacle hole — the honest fix is a redesign, not a patch, so it is recorded here rather than patched at 2.3. The canonical candidate in phase2_generate/phase2_generate_output.json was authored to confront it."
+  }
+]
