@@ -1,0 +1,589 @@
+# config/locked.yaml
+# ==========================================================================
+# STATUS: DRAFT — NOT FROZEN
+# ==========================================================================
+# Research question: LOCKED
+# Mathematical protocol: v2, awaiting human review
+#
+# 禁止事项（给 Claude Code）：
+#   - 禁止 freeze 本文件
+#   - 禁止开始任何实验（W1 pilot 除外，见 pilot 段）
+#   - 凡标记 UNRESOLVED 的字段，禁止自行填值
+#   - 每个 UNRESOLVED 对应 open_mathematical_questions.md 中的一个 Q 编号
+#
+# freeze 条件：所有 UNRESOLVED 已由人类填定，且 Q2/Q3/Q5/Q8 的推导已完成。
+# freeze 之后本文件转为只读；任何修改须记入 CHANGELOG_preregistration.md。
+# ==========================================================================
+
+meta:
+  protocol_version: "v2.1"
+  frozen: false
+  supersedes: "BRIEF_relational_geometry_EIV.md sections 3-7"
+  date_drafted: "2026-08-20"
+  date_decisions_filled: "2026-08-20"
+  date_pilot_fields_drafted: "2026-08-20"
+
+  # ------------------------------------------------------------------
+  # 由 Claude Code 于 2026-08-20 起草，**尚未经人类确认**。
+  # 与上方 provisional_decisions 的区别：那些是人类采纳顾问建议后填入的；
+  # 以下三项是 Claude Code 提出的方案，人类确认前**不得据以执行 pilot**。
+  # frozen 仍为 false。
+  # ------------------------------------------------------------------
+  pending_human_confirmation:
+    - field: "pilot.layer_selection"
+      value: "floor(0.75 * L) -> hidden_states[21]（L=28）"
+      replaces: "pilot.report_per_layer 的『取实际会用的那层』（被 Rule 002 v2 判 BLOCK）"
+      second_choice_if_rejected: "floor(L/2) = 14（对假设更中立，但外部理由更弱）"
+    - field: "pilot.concept_set"
+      value: "借用 arXiv:2406.01506 释出的 WordNet 名词层级 + 角色模板 R1/R2/R3 + ASCII 序"
+      blocking_dependency: "repo commit SHA 未 pin；引用须按执行协定 #6 实际取回确认"
+    - field: "pilot.prompt_design"
+      value: "配对 + 单槽替换 + filler 置于句中 + token 数严格配平；8 frames x 16 pairs"
+      blocking_dependency: "引出新开放问题 Q11（配对设计改变 rho 的常数 2/n -> 1/n，且影响 Q2 的 c_jk）"
+
+
+  # ------------------------------------------------------------------
+  # 决策来源标记：以下 5 项由人类于 2026-08-20 采纳顾问建议填入，
+  # 标记为 PROVISIONAL —— 人类明确表示稍后会重新审视。
+  # Claude Code 按这些值执行，但若在执行中遇到与之冲突的证据，
+  # 必须停下来报告，不得自行改值。
+  # ------------------------------------------------------------------
+  provisional_decisions:
+    - field: "metric.choice"
+      value: "identity"
+      question: "Q1"
+      revisit_trigger: "若审稿意见集中攻击 '只研究了 naive cosine'，重新考虑把 causal 升为主设定"
+    - field: "undefined_estimator_policy.rule"
+      value: "count_as_failure"
+      question: "Q6"
+      revisit_trigger: "若未定义率高到 cv 臂在全部网格上都无结果，需重新设计而非改规则"
+    - field: "inference.tost_delta"
+      value: null
+      question: "Q7"
+      revisit_trigger: >
+        **人类已标记为需要事后重新思量。**
+        代价：论文将无法宣称 '这些概念对不正交'，只能宣称
+        '我们无法判断它们是否正交'。后者仍是有效贡献，但必须在 W6
+        写作前确认人类接受这一主张边界。若 W1/W2 期间找到有出处的
+        外部 delta，可升回 primary。
+    - field: "holdout.difference_axes"
+      value: ["non_gaussian_residuals", "non_power_law_spectrum"]
+      question: "Q9"
+      revisit_trigger: "若 W2 的推导引入新的字面假设，需相应增加攻击该假设的轴"
+    - field: "pilot.model / pilot.abort_threshold"
+      value: "Qwen2.5-1.5B / 200"
+      question: "pilot"
+      revisit_trigger: "阈值由 sqrt(2/r_eff) 的相对 SD 导出；若改用其他残差模型需重算"
+
+# --------------------------------------------------------------------------
+# 1. Estimand 与度量
+# --------------------------------------------------------------------------
+estimand:
+  target: "normalized_gram_matrix"
+  formula: "G_jk = (v_j' M v_k) / sqrt(v_j' M v_j * v_k' M v_k)"
+  direction_estimator: "difference_of_means"   # 唯一，防火墙约束，不得增加
+
+metric:
+  # Q1 [RESOLVED 2026-08-20, provisional]
+  choice: "identity"                                   # M = I
+  robustness_arm: "causal_inner_product"
+  robustness_arm_scope: ["E2", "E4"]                   # 仅这两个实验；不推理论
+  robustness_arm_limitation_must_state: >
+    M-hat 的估计误差未纳入 T3；此臂只作稳健性展示，不支持任何渐近主张。
+  M_estimated_from_independent_data: "n/a"             # M = I，无需估计
+  notes: >
+    主实验用 M = I 把理论推干净（避免 M-hat / v-hat_j / v-hat_k 三重相关）。
+    causal_inner_product 作为稳健性臂，用于回应 "你只研究了 naive cosine" 的
+    预期质疑。Limitations 必须明写此臂的局限。
+
+# --------------------------------------------------------------------------
+# 2. 误差结构设定
+# --------------------------------------------------------------------------
+error_structure:
+  primary: "option_B_shared_data"     # Cov(e_j, e_k) != 0；真实做法
+  control_arm: "option_A_independent" # 解析特例；用于 E6 的对照
+  rationale: >
+    Option A 下 naive 分子已无偏，cross-validation 无收益，cv 与 disattenuated
+    近乎重合，三估计量比较塌成两个。cross-validation 只在 Cov(e_j,e_k) != 0 时
+    才挣到位置。详见 changes_from_v1.md §8。
+  cov_ejk_closed_form: UNRESOLVED     # Q2，W2 推导后填入并数值验证
+
+# --------------------------------------------------------------------------
+# 3. Gram 估计量（三个，不得增删）
+# --------------------------------------------------------------------------
+estimators:
+  - name: "naive"
+    formula: "(v̂_j' M v̂_k) / (||v̂_j||_M ||v̂_k||_M)"
+    known_failure: "bounded, attenuated, non-concentrated, skewed"
+  - name: "cross_validated"
+    formula: "â_jk / sqrt(â_jj * â_kk)"
+    naming_rule: >
+      只能称 'cross-validated Gram estimator based on unbiased cross-products'。
+      禁止称 'unbiased Gram estimator'。
+    known_failure: "â_kk -> 0 时爆炸；â_kk < 0 时未定义"
+  - name: "disattenuated"
+    formula: "naive * (r̂_j * r̂_k)^(-1/2)"
+    known_failure: "reliability 估计 -> 0 时方差爆炸；继承 T2.5 估计误差"
+
+undefined_estimator_policy:
+  # Q6 [RESOLVED 2026-08-20, provisional]
+  rule: "count_as_failure"
+  must_report_undefined_rate: true
+  undefined_rate_is_headline_result: true   # 它是 cv 崩溃时机的直接度量，须作为 rho 与 r_eff 的函数报告
+  consistency_rule: "同一规则必须应用于 E1/E2/E4/E5/E6，不得因实验而异"
+  forbidden:
+    - "剔除未定义的复制样本"
+    - "截断到小正数（会引入新的可调参数，等于新开一个作弊面）"
+    - "在不同实验中使用不同规则"
+  rationale: >
+    以成功为条件采样会让 cv 显得人为稳定。未定义率本身是科学结果，
+    直接接上 T2：它应随 rho 下降、随 r_eff 下降而上升。
+
+# --------------------------------------------------------------------------
+# 4. DGP
+# --------------------------------------------------------------------------
+dgp:
+  form: "h = sum_k z_k v_k + eps"
+  eps_distribution: "gaussian"        # holdout family 会包含非高斯，见 holdout 段
+  spectrum_family: "power_law"        # lambda_i propto i^(-alpha)
+  spectrum_family_alternative: UNRESOLVED   # Q8：若 power-law 无法给出足够 r_eff 杠杆则改用直接指定谱型
+
+  grid:
+    d:     [256, 1024, 4096]
+    n:     [32, 128, 512]
+    alpha: [0.0, 0.5, 1.0, 2.0]
+    K:     [6, 12]
+    rho:   [0.5, 2.0, 8.0]
+
+  hidden_from_method:
+    - "true directions v_k"
+    - "true pairwise angles"
+    - "hierarchy tree"
+    - "alpha"
+    - "r_eff_M"
+
+  known_structure:
+    - "exact orthogonal pairs"
+    - "60-degree pairs"
+    - "one known hierarchy tree"
+
+  r_eff_lever_check: UNRESOLVED   # Q8：freeze 前必须数值确认 r_eff_M 覆盖区间是否足够
+
+# --------------------------------------------------------------------------
+# 5. Monte Carlo 预算
+# --------------------------------------------------------------------------
+monte_carlo:
+  seeds_default: 200          # E1, E2, E3a, E3b, E5, E6
+  B_coverage: 2000            # E4 专用；p=0.95 时 MC se ≈ 0.005
+  report_binomial_error_bars: true
+
+# --------------------------------------------------------------------------
+# 6. 实验与终点
+# --------------------------------------------------------------------------
+experiments:
+  E1:
+    question: "T1 衰减律的准确度"
+    endpoint_type: "continuous"      # T1 只是近似，禁止硬性二值化
+    binary_criterion: null
+  E2:
+    question: "朴素估计量把非正交判成正交的比率（头条）"
+    true_G_for_test_pairs: 0.3
+    endpoint_type: "continuous_surface"
+    preregistered_assertion: "存在文献常见 (n,d,alpha) 组合使错误等价宣称率 > 0.5"
+  E3a:
+    question: "直接检验 T2（精确恒等式）"
+    regression: "Var(||ẽ||^2)/(E||ẽ||^2)^2  ~  1/r_eff_M"
+    theoretical_slope: 2.0           # v1 写 1.0 是错的
+    binary_criterion: "slope CI 覆盖 2.0"
+    slope_criterion_real_model: UNRESOLVED   # Q4：真实模型非高斯，判据需另定
+  E3b:
+    question: "T2 的下游后果；排除 '只是 d/n 大' 的替代解释"
+    holds_fixed: ["d", "n", "tr(M Sigma)"]
+    varies: ["r_eff_M"]
+    endpoint_type: "continuous"
+  E4:
+    question: "同时置信集是否校准"
+    coverage_type: "simultaneous"    # P(for all j<k: G_jk in C_jk)；非 marginal
+    nominal_level: 0.95
+    construction: UNRESOLVED         # Q3：multiplier bootstrap（建议主）/ Bonferroni（sanity 对照）
+    undefined_counts_as_noncoverage: true
+    drop_failed_replicates: false    # 硬性禁止
+  E5:
+    question: "层级结构的伪造与抹除"
+    endpoint_type: "continuous"      # FDR 与 power
+    preregistered_assertion: "naive 的 FDR 在高 alpha 低 n 区超过名义水平"
+  E6:
+    question: "估计量塌缩预测（v2 新增）"
+    preregistered_assertion: >
+      cv 与 disattenuated 的差异在 Option A 下小于容差 tau、在 Option B 下显著大于 tau
+    tolerance_tau: UNRESOLVED        # 依赖 Q2 的推导结果
+    note: "若 Option B 下二者仍近乎重合，触发放弃条件 #4"
+
+# --------------------------------------------------------------------------
+# 7. 推断
+# --------------------------------------------------------------------------
+inference:
+  # Q7 [RESOLVED 2026-08-20, provisional —— 人类已标记事后重新思量]
+  primary: "continuous_G_plus_simultaneous_CI"
+  tost_status: "downgraded_to_exploratory"
+  tost_delta: null
+  tost_delta_source: null
+  tost_delta_forbidden_source: "measurement_resolution"   # 循环论证，v1 的错误
+
+  headline_claim_form: >
+    展示同时置信区间同时包含 0 与 0.4（或类似区间），据此论证
+    "概念近似正交" 的主张在该 regime 下无法被数据支持。
+    此形式不需要宣布任何阈值，因而不给审稿人攻击 delta 的把柄。
+
+  claim_boundary_must_be_accepted_before_W6: >
+    在此配置下，论文**不能**宣称 "这些概念对不正交"，
+    只能宣称 "我们无法判断它们是否正交"。
+    W6 写作前必须由人类确认接受这一边界。Claude Code 不得替人类接受。
+
+  upgrade_condition: >
+    若 W1/W2 期间找到有明确出处的外部 delta（外部科学判据或有引用的文献惯例），
+    可将 TOST 升回 secondary。届时必须记入 CHANGELOG_preregistration.md。
+
+# --------------------------------------------------------------------------
+# 8. Holdout
+# --------------------------------------------------------------------------
+holdout:
+  # Q9 [RESOLVED 2026-08-20, provisional]
+  custodian: "human"
+  claude_code_may_read: false
+  difference_axes:
+    - axis: "non_gaussian_residuals"     # t 分布 / 混合
+      attacks: "T2 的精确性 —— 常数 2 依赖高斯四阶矩 (Q4)"
+      required: true
+    - axis: "non_power_law_spectrum"     # 少数极大特征值 + 平坦尾
+      attacks: "谱族假设 (Q8)；且这才是 rogue dimension 的真实形状"
+      required: true
+  optional_axes:
+    - axis: "unequal_concept_norms"
+      attacks: "rho 同质性的隐含假设"
+    - axis: "alternative_tree_topology"
+      attacks: "E5 的实验设置"
+  selection_rationale: >
+    两条必需轴各自攻击理论**字面依赖**的一个假设；可选轴只攻击实验设置，
+    优先级较低。若 W2 的推导引入新的字面假设，须相应增加轴。
+  reveal_timing: "W6，由人类一次性执行"
+  note: "仅换 seed 不构成 holdout"
+
+# --------------------------------------------------------------------------
+# 9. W1 Pilot（唯一允许在 freeze 前执行的部分）
+# --------------------------------------------------------------------------
+pilot:
+  allowed_before_freeze: true
+  gate_type: "go_no_go"
+
+  # ======================================================================
+  # 守门员分类（stat-gatekeeper v2 §0）：Type D — descriptive measurement
+  # 附一条**预注册的项目级资源决策规则**（abort_threshold）。
+  # 该决策规则不是科学主张，见 gate_is_resource_decision_not_inference。
+  # ======================================================================
+  experiment_type: "D"
+  quantity:
+    - "r_eff_M_hat of the WITHIN-CONCEPT PAIRED-DIFFERENCE residual covariance Sigma_d"
+    - "rho_k_hat for each of the K=12 concepts"
+  estimator: "naive plug-in（T2.5 偏差校正推迟到 W6；Q5 未解决）"
+  known_bias_direction: >
+    d >> n 时 tr(M Sigma M Sigma) 的朴素插值**上偏** => r_eff_M_hat = tr(MSigma)^2/tr(MSigmaMSigma)
+    **下偏**。下偏方向 = 对本项目**有利**的方向（r_eff 越小，T2/T3b 的故事越强）。
+  gate_asymmetry_note: >
+    因上述偏差方向，本闸门是**不对称**的：
+      - red（r_eff_M_hat 仍 > abort_threshold，即在有利偏差下仍然很大）= **强证据**；
+      - green（r_eff_M_hat 小）= **弱证据**，因为偏差本就朝这个方向推。
+    因此 green 只解锁 W2，不构成对 T3b 现实相关性的任何确认；确认须等 W6 的校正版本。
+    **不得**因为知道了偏差方向而在见数据后调整 abort_threshold（Rule 001 / Rule 005）。
+  uncertainty_reported: true
+  comparison_forbidden: true
+  gate_is_resource_decision_not_inference: >
+    abort_threshold 是项目资源分配的决策规则，不是科学主张。pilot 的任何输出中
+    禁止出现「证实 / 验证了 / 效果好 / 符合预期 / 我发现」一类措辞（Rule 009）。
+    pilot 不得对任何假设做成败判定。
+
+  model: "Qwen2.5-1.5B"              # 写死。d=1536，比 Gemma-2-2B 的 2304 快
+  model_config_expected:
+    num_hidden_layers: 28
+    hidden_size: 1536
+    source: "HF Qwen/Qwen2.5-1.5B config.json；**必须在运行时实际读取核对**，不得凭此处数值执行"
+  model_switching_forbidden: >
+    禁止 "两个都跑然后报好看的那个"。若因技术原因必须换模型，
+    须记入 CHANGELOG_preregistration.md 并说明原因。
+  K: 12
+
+  # ----------------------------------------------------------------------
+  # 9.1 层选择  [FILLED 2026-08-20 by Claude Code — 待人类确认]
+  #     替代原 `report_per_layer: true  # 取实际会用的那层` ——
+  #     该写法被 stat-gatekeeper Rule 002 v2 判定为 BLOCK。
+  # ----------------------------------------------------------------------
+  layer_selection:
+    rule: "decision_layer = floor(0.75 * L), L = num_hidden_layers（从 config.json 读）"
+    rule_inputs: ["architecture constant L"]     # 不含任何前向传播产物
+    rule_fixed_before_any_forward_pass: true
+    L_expected: 28
+    decision_layer_index: 21
+    index_convention: >
+      HF output_hidden_states=True 返回 L+1 个张量；hidden_states[0] = embedding 层输出，
+      hidden_states[i] = 第 i 个 transformer block 的输出。
+      decision layer := hidden_states[floor(0.75*L)]。L=28 时为 hidden_states[21]。
+      若运行时实测 L != 28，**以公式为准**，并把解出的层号记入 CHANGELOG_preregistration.md。
+    readout: "last-token hidden state, no generation, model.eval(), upcast to float32"
+    all_layers_reported: true
+    all_layers_role: "descriptive_only"          # 曲线照报，但不参与判定
+    discordance_rule: >
+      若 decision layer 的 gate 分类（red / amber / green）与全层中位数的分类不一致，
+      **必须如实报告该不一致**，不得择一采信，也不得据此改 decision layer。
+      此规则只会使结论更保守。
+    locked_for_W6: true                          # W6 完整版沿用同一层，不得更换
+    forbidden:
+      - "以任何层的结果反过来改变 decision layer"
+      - "在摘要 / 结论 / gate 判定中引用非 decision layer 的数字"
+      - "『取实际会用的那层』—— referent 未先行固定，等于多绕一步的 argmax"
+      - "对全层做 argmax / argmin / top-k"
+    why_not_implicit_argmax: >
+      (1) 规则的唯一输入是架构常数 L，不含任何数据；给定 L 只能解出唯一层号。
+      (2) 常数 0.75 在任何 forward pass 之前写入本文件并 commit，不能"随结果被重新评估"。
+      (3) 与被否决写法的关键差别：「取实际会用的那层」的 referent 在协议中从未定义，
+          因此"实际会用哪层"必然是看过 r_eff 曲线之后才定的 —— 那是隐性 argmax。
+      (4) 残余自由度（为何是 0.75 而非 0.5）真实存在，由两点中和：常数先于数据冻结；
+          全层曲线公开，读者可自行判断结论是否依赖该选择 —— 但**判定不动**。
+    rejected_alternatives:
+      - option: "倒数第二层 / 最后一层 (L-1 或 L)"
+        reason: >
+          最危险且不显眼。末层是 rogue dimensions 最极端处（Timkey et al. 记录），
+          也就是最可能给出**小 r_eff**、让项目活下来的那一层。不看数据、但按
+          "哪层最可能给出有利答案"来选，仍然是做牌。且末层高度特化于 next-token 预测，
+          其残差结构含输出词表几何，不是 concept 几何。
+      - option: "中间层 floor(L/2) = 14"
+        reason: >
+          **第二选择，并非错误方案。** 它对假设更中立，但"这是实践中真正抽取
+          concept direction 的深度"这一外部理由更弱，而 pilot 的目的正是适用域确认。
+          若人类更看重"不向假设倾斜"而非"贴合实践"，可改为 14 —— 但必须现在改、只改一次。
+      - option: "全层平均 / 全层报 + 多重比较校正"
+        reason: >
+          r_eff 跨深度差一个数量级，跨异质层平均 trace 比值无干净解释，闸门会被少数层主导。
+          多重校正版本把 go/no-go 决策变成假设检验族，与 Type D 定位矛盾。
+      - option: "用另一批独立数据选层"
+        reason: >
+          仍是 selection，只是把成本转成额外的 sample-splitting 纪律与选择代价核算；
+          对 go/no-go pilot 过度设计，且新增一个可被静默调整的面。
+
+  # ----------------------------------------------------------------------
+  # 9.2 概念集 K=12  [FILLED 2026-08-20 by Claude Code — 待人类确认]
+  #     选择过程完全不看数据（不做任何 forward pass）。
+  # ----------------------------------------------------------------------
+  concept_set:
+    principle: >
+      不是"选一条好规则"，而是把作者自由度尽可能**外包**给一份已发表、可引用、可 diff
+      的清单，只保留一个由 estimand 决定的角色模板 + 一个机械序。
+    source_primary:
+      paper: "Park, Choe, Jiang & Veitch, The Geometry of Categorical and Hierarchical Concepts in LLMs, arXiv:2406.01506 (ICLR 2025)"
+      released_asset: "从 WordNet 构造的 957 个层级相关概念"
+      repo: "https://github.com/KihoPark/LLM_Categorical_Hierarchical_Representations"
+      pin_commit_sha: UNRESOLVED     # 首次使用时必须记录并 commit
+      citation_verification_required: true    # 执行协定 #6：必须实际取回确认
+    borrowed: ["concept inventory", "hypernym tree（外部先验层级关系）"]
+    NOT_borrowed:
+      - "他们基于 unembedding 的 direction estimator（本项目只用 difference_of_means）"
+      - "他们的正交性预测"
+    metric_caveat: >
+      **重要**：2406.01506 的"层级相关概念正交"结论是在 **causal inner product** 下陈述的，
+      在 M = I 下**不成立**。本项目只借概念清单与树，**不得**把该正交性预测当作
+      M = I 下的理论预期。若要引用该预测，只能在 causal_inner_product 稳健性臂（E2/E4）中。
+    selection_rule:
+      - "1. Pin repo commit SHA，记入本文件。"
+      - "2. 在释出文件给出的 synset 上建 hypernym DAG。"
+      - "3. master order := 按 WordNet synset 名字符串 ASCII 升序（在运行前固定）。"
+      - "4a. R1 层级对（4 个）：master order 中前两组 parent-child 对，父子均在文件内且各有 >= 16 个 distinct lemma。"
+      - "4b. R2 同胞（4 个）：共享同一父节点的前 4 个 co-hyponym，与 R1 的 synset 不相交。"
+      - "4c. R3 不相交分支（4 个）：与已选全部 synset 的最低公共祖先均为 entity.n.01 的前 4 个。"
+      - "5. 任一角色填不满 => 放宽阶梯：lemma 门槛 16 -> 12；仍不满则转 source_fallback。"
+    role_rationale: >
+      三个角色由 estimand 决定，不由结果决定：R1 提供已知层级约束（E5 / §7 所需）；
+      R2 提供"预期相关但非嵌套"的对；R3 提供文献中会被随口宣称"正交"的对，即 E2 的靶子。
+    source_fallback:
+      name: "WordNet 3.0 直接枚举（nltk wordnet corpus，版本字符串记入日志）"
+      knobs_must_be_written_down: ["root synset", "depth cutoff", "lemma filter", "ordering"]
+      use_condition: "仅当 source_primary 不可用 / 不可用于 minimal-pair 构造时；须记 CHANGELOG"
+    forbidden_selection_criteria:
+      - "任何与 rho_k 或 r_eff 相关的筛选（词频、prompt 数量、probe 精度等）"
+      - "理由：词频与表示质量正相关 => 与 rho_k 正相关 => 这是对被测量本身的隐性 argmax，只是伪装成合理性筛选"
+      - "由 LLM 生成概念集"
+      - "作者凭直觉挑选『有代表性』的概念"
+    revision_policy:
+      allowed_revisions_before_forward_pass: 1
+      allowed_ground: "仅限 prompt_design.pre_forward_checks 的机械检查不通过（如 tokenization 冲突）"
+      replacement_rule: "取同一冻结 master order 中的下一个候选，逐条记 CHANGELOG_preregistration.md"
+      after_any_forward_pass: "概念集一律不得改动"
+      rationale: >
+        换掉『表现不好』的概念 = Rule 006 的同构情形（删失败样本）。
+        以成功为条件的概念选择会让 pipeline 显得人为干净。
+    rejected_alternatives:
+      - option: "按语料词频取前 12（『选常见概念』）"
+        reason: "看似无害实则最脏：词频 ~ 表示质量 ~ rho_k，是对被测量的隐性 argmax；且额外引入语料与频率表两个旋钮。"
+      - option: "让 LLM 自己生成 12 个概念"
+        reason: "不可复现；生成器与被测模型同族，模型自身几何经概念选择泄漏；prompt 措辞是无界自由度。"
+      - option: "作者凭直觉挑选"
+        reason: "不可审计；审稿人无法与『挑了几何方便的概念』区分；天然邀请事后替换。"
+      - option: "纯自建 WordNet 规则（自选 root + depth + 词形过滤）"
+        reason: "数据无关但有约 5 个作者旋钮，每个都能被静默重调。降级为 source_fallback，旋钮全部写死。"
+      - option: "沿用 occupation-gender 偏见概念集"
+        reason: "无外部层级结构；且会把已被证伪、已废弃的原始 C1 叙事拖回来。"
+
+  # ----------------------------------------------------------------------
+  # 9.3 minimal-pair prompt 设计  [FILLED 2026-08-20 by Claude Code — 待人类确认]
+  #     若此项不干净，v_k 混入的就不只是目标概念，**estimand 本身改变**。
+  # ----------------------------------------------------------------------
+  prompt_design:
+    template: "frame_t = <prefix_t> {X} <suffix_t>；positive = prefix_t + x_plus_i + suffix_t；negative = prefix_t + x_minus_i + suffix_t"
+    filler_position: "句中，**不放句尾**"
+    readout: "prompt 最后一个 token 的 hidden state（decision layer），无生成"
+    why_filler_not_final: >
+      suffix 两侧逐字节相同 + 强制两侧 filler token 数相等
+      => 两侧最后一个 token 的 **token id 与位置索引完全一致**
+      => 读数位置上的『这是个什么 token』混淆被结构性消除。
+    example_frames:
+      - "In the picture, the {X} stayed close to the fence."
+      - "She mentioned that the {X} had already left the area."
+      - "Everyone agreed the {X} looked unusual that morning."
+    frames_total: 8
+    frames_file: "prompts/frames.txt"
+    frames_sha256: UNRESOLVED        # 首次前向传播之前必须冻结并记录
+    fillers_file: "prompts/fillers_by_concept.json"
+    fillers_sha256: UNRESOLVED
+    hard_constraints:
+      - "两侧 filler 的 tokenizer token 数**严格相等**"
+      - "filler 全部单数、小写、普通名词、**辅音开头**（消灭 a / an 混淆）"
+      - "两侧仅一个连续片段不同，其余逐字节相同"
+      - "8 frames x 16 item pairs = 128 pairs/concept（128 是 dgp.grid.n 中已冻结的值，非新挑）"
+      - "hidden states 升到 float32 再计算（r_eff 依赖 tr(Sigma)^2/tr(Sigma^2)，bf16 会污染谱）"
+    paired_difference:
+      rule: "v_hat_k = mean_i(h_plus_i - h_minus_i)，**不是**两个独立池化均值之差"
+      reason: "逐项配对使 frame 效应精确抵消"
+    residual_definition:
+      d_i: "h_plus_i - h_minus_i"
+      residual: "d_i - mean_i(d_i)"
+      Sigma_hat: "Cov(d_i) 即 Sigma_d；r_eff_M 与 rho_k 均由此算，不用 raw hidden state 协方差"
+    estimand_vs_contamination: >
+      **必须区分**：hypernym 概念之间本来就该相关（mammal 的正例是 animal 正例的子集），
+      那是 estimand，不是污染。污染 := 对比中**不属于目标概念**的系统性变异。
+      **禁止**"清洗到所有概念对都正交为止" —— 那是在消灭被估计量。
+    known_failure_case:
+      name: "tokenization 混淆伪装成干净的 minimal pair"
+      example: "概念 = mammal vs bird，filler 取 dog / sparrow：两侧都是单个英文常用名词、同一句法位置、同一 frame，肉眼完全干净。"
+      mechanism: >
+        sparrow 在 BPE 下可能切成 2 个 token 而 dog 为 1 个 => 句长不同、位置索引整体错位；
+        即使读数放句尾，负例侧中间表征仍一路携带『词内续接子词』特征。
+      why_catastrophic: >
+        该污染在**所有概念上同号**：每个概念的较罕见词那一侧都带同一个 subword 方向
+        => 12 个 v_hat_k 被注入**共享分量** => G 被系统性**抬向 1**。
+        论文头条是 naive 把非正交**衰减向 0**，此 bug 方向相反，足以把结果整体读反，
+        且不会以『噪声变大』的形式暴露自己。
+      secondary_cases:
+        - "语义型：doctor / nurse 做性别概念，同时差了职业声望与词频 —— minimal 在词形上而非概念上"
+        - "句法型：'a apple' 的不合语法本身就是一个巨大方向"
+    pre_forward_checks:
+      must_pass_rate: 1.0
+      computed_on: "字符串 / token，不做任何 forward pass"
+      checks:
+        - "每对两侧 token 数严格相等"
+        - "diff：两侧恰好一个连续片段不同"
+        - "两侧最后一个 token 的 id 与位置索引一致"
+        - "冠词一致性 regex（a / an）"
+        - "大小写与标点逐字节一致"
+        - "记录 12 个概念之间正负集的**重叠矩阵** —— 这就是 Q2 的 c_jk，直接交给 W2，不得重算第二遍"
+      on_failure: "走 concept_set.revision_policy 的确定性替换阶梯，记 CHANGELOG"
+      forbidden_on_failure: "手动改 prompt 直到通过（= prompt hacking）"
+    post_forward_diagnostics:
+      status: "report_only —— **禁止**据此修改概念集或 prompt"
+      items:
+        - name: "control_contrast（Hewitt & Liang 风格 placebo）"
+          construction: "额外一组两侧取自**同一类别**的对（如 dog vs cat），对应一个不存在的概念"
+          preregistered_rule: "若 rho_control > min_k rho_k => **停下来报告人类**"
+          free_threshold: false
+          not_an_inferential_criterion: true
+        - name: "shared_component_diagnostic"
+          quantity: "|| mean_k v_hat_k || / mean_k || v_hat_k ||"
+          reference_value: "1/sqrt(K)"
+          preregistered_rule: "超过参考值 2 倍 => **仅触发**停下来报告人类，由人类裁决"
+          trigger_type: "report_to_human_only"
+          not_an_inferential_criterion: true
+    freeze_discipline:
+      - "所有 prompt 文件在**首次前向传播之前**冻结并记 sha256"
+      - "此后不得编辑；任何编辑须记 CHANGELOG_preregistration.md 并说明是否已污染既有结果"
+    rejected_alternatives:
+      - option: "让 LLM 生成 prompts"
+        reason: "无界、不可审计；生成器自身几何泄漏；审稿人无法重建。"
+      - option: "从自然语料挖 minimal pairs（BLiMP 风格）"
+        reason: "生态效度是其唯一优点。但自然出现的对永远不会在 token 数与 frame 上配平；事后配平 = 在语料上做 selection，且词频混淆原封不动。"
+      - option: "长上下文 / 多句 prompt"
+        reason: >
+          frame 越长，目标词与上下文的交互差异越多（连贯性效应），读数位置更易漂。
+          代价须写入 Limitations：estimand 是『短模板 prompt 下的 concept direction』，非普适 concept direction。
+      - option: "不配对，两侧各自独立池化（unpaired difference-of-means）"
+        reason: "frame 效应不抵消；同样 rho 需多得多的样本；且使 Q2 的 c_jk 分析更乱。"
+      - option: "prompt 里直接写概念名（'The following is about mammals: ...'）"
+        reason: "测到的是词元 'mammals' + 指令跟随，不是概念；单 token 混淆。"
+      - option: "split-half 稳定性诊断"
+        reason: "与 rho_hat_k 信息重复；且撞上 abort_conditions #2 关心的 2026 split-half 论文地盘，徒增雷同观感。"
+
+  # ----------------------------------------------------------------------
+  # 9.4 配对设计对理论常数的影响（Claude Code 新提出的开放问题，标 Q11）
+  # ----------------------------------------------------------------------
+  paired_design_constant_reconciliation: UNRESOLVED   # Q11 —— 禁止 Claude Code 自行填值
+  paired_design_constant_note: >
+    protocol_v2 §1 的 rho_k = v'Mv / ((2/n) tr(M Sigma)) 中的 **2/n 是非配对设定**下的常数。
+    配对设计下 Var(v_hat_k) = Sigma_d / n_pairs，故应为 rho_k = v'Mv / (tr(M Sigma_d) / n_pairs)。
+    影响范围：
+      - **闸门不受影响**：r_eff_M 只依赖 Sigma_d 的谱形，与该常数无关，abort_threshold = 200 照常有效。
+      - **rho_hat_k 的绝对值受影响**（约一个因子 2 的量级），报数时必须把约定写在数字旁边。
+      - 配对使 P_j / N_j 变为 index-matched，**Q2 的 c_jk 闭式需按配对特例重新核对**。
+    须由人类 / W2 裁定后填入。
+
+  must_report_first:
+    - "r_eff_M_hat of WITHIN-CONCEPT PAIRED-DIFFERENCE residual covariance Sigma_d"   # 不是 raw hidden state 协方差
+    - "rho_k_hat for each concept（附上 §9.4 的常数约定）"
+  bias_correction_applied: false     # 允许粗版；但必须标明偏差方向（Q5），见 known_bias_direction
+  forbidden: "在报告上述两个量之前计算或展示任何 G"
+
+  # 阈值由理论导出，非拍脑袋：||e||^2 的相对标准差 = sqrt(2 / r_eff)
+  #   r_eff = 20   -> 32%  分母剧烈波动，T2/T3b 的故事强
+  #   r_eff = 200  -> 10%  边缘
+  #   r_eff = 2000 -> 3%   分母近乎确定性，只剩 T1 的衰减（1904 年的老结果），novelty 死
+  abort_threshold: 200
+  amber_zone: [50, 200]
+  amber_action: >
+    继续，但论文重心从 T3b（低有效秩下高斯推断失效）移回 T1 / T2.5
+    （衰减与 reliability 估计）。须向人类报告后再继续。
+  gate_evaluated_at: "layer_selection.decision_layer_index only"
+  concurrent_task: "定位 2026 split-half cosine direction-stability 那篇的确切引用"
+
+# --------------------------------------------------------------------------
+# 10. 放弃条件
+# --------------------------------------------------------------------------
+abort_conditions:
+  - id: 1
+    trigger: "W1 pilot 显示真实模型 residual r_eff_M 很大"
+    action: "转 C3"
+    priority: "首要闸门"
+  - id: 2
+    trigger: "W1 发现已有工作做了 disattenuated / calibrated relational-Gram inference"
+    action: "停，向人类报告，转 C3"
+  - id: 3
+    trigger: "W4 的 E2 显示错误正交宣称率在任何文献常见参数下都 < 0.1"
+    action: "转 C3"
+  - id: 4
+    trigger: "W4 的 E6 显示 Option B 下 cv 与 disattenuated 仍几乎重合"
+    action: "降级为诊断性 short paper，或转 C3"
+
+# --------------------------------------------------------------------------
+# 11. 防火墙（继承自 BRIEF v1 §2，不可修改）
+# --------------------------------------------------------------------------
+firewall:
+  - "不使用 kappa = cos(dmu, (Sigma+lambda I)^-1 dmu)"
+  - "只使用一个方向估计量：difference_of_means（三个 Gram 估计量不违反此条）"
+  - "只使用一个 metric，不做 Euclidean vs whitening 的比较"
+  - "不接 Tan et al. (arXiv 2407.12404) 的 anti-steerable 数据"
+  - "不做 intervention / activation steering 实验"
+  - "不研究 identifiability；全程假设 estimand 良定义"
